@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LaundryFlow</title>
+<style>
+*{box-sizing:border-box}
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f4f6fa}
+body{margin:0;background:#f4f6fa;color:#172033}
+header{height:64px;background:#203f67;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 22px;position:sticky;top:0;z-index:20}
+header b{font-size:19px}
+header input{width:310px;max-width:42vw;padding:11px 14px;border:0;border-radius:8px;outline:0;font-size:14px}
+main{max-width:900px;margin:0 auto;padding:28px 18px 95px}
+h2{font-size:24px;margin:0 0 18px}
+h3{font-size:17px;margin:24px 0 12px}
+.panel{background:#fff;border:1px solid #dce2ea;border-radius:10px;padding:16px;margin:12px 0;box-shadow:0 1px 2px rgba(20,35,55,.04)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.stat{background:#fff;border:1px solid #dce2ea;border-radius:10px;padding:16px}
+.stat b{display:block;font-size:24px;margin-bottom:5px}
+.stat span{font-size:13px;color:#667085}
+.stat.bad b{color:#b42318}
+.pipe{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pipe button{background:#fff;border:1px solid #dce2ea;border-radius:9px;padding:13px;text-align:left;cursor:pointer}
+.pipe button:hover{border-color:#203f67}
+.pipe b{display:block;font-size:20px;margin-bottom:3px}
+.row{background:#fff;border:1px solid #dce2ea;border-radius:10px;padding:14px 16px;margin:9px 0;display:flex;align-items:center;justify-content:space-between;gap:15px;cursor:pointer}
+.row:hover{border-color:#9db1cb}
+.row small{display:block;color:#667085;margin-top:5px}
+.badge{display:inline-block;background:#edf2f7;border-radius:999px;padding:5px 9px;font-size:12px;margin:2px}
+.badge.ok{background:#e8f5ee;color:#16794c}
+.badge.warn{background:#fff4db;color:#8a5a00}
+.badge.bad{background:#fdecec;color:#b42318}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}
+input,select,textarea{width:100%;border:1px solid #cfd7e3;border-radius:7px;padding:10px 11px;font:inherit;background:#fff;outline:0}
+input:focus,select:focus,textarea:focus{border-color:#50739f;box-shadow:0 0 0 3px rgba(80,115,159,.12)}
+.item{display:grid;grid-template-columns:1fr 110px 60px;align-items:center;gap:12px;padding:6px 0}
+.pr{font-size:13px;color:#667085;text-align:right}
+.item input{padding:9px}
+.btn{border:0;border-radius:7px;background:#203f67;color:#fff;padding:10px 15px;cursor:pointer;font-weight:700}
+.btn:hover{background:#173452}
+.btn.alt{background:#e9eef5;color:#203f67}
+.btn.bad{background:#b42318}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+#toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:#172033;color:#fff;padding:11px 16px;border-radius:8px;display:none;z-index:50;box-shadow:0 5px 20px rgba(0,0,0,.18)}
+nav{position:fixed;bottom:0;left:0;right:0;height:58px;background:#fff;border-top:1px solid #dce2ea;display:flex;justify-content:center;z-index:30}
+nav button{border:0;background:transparent;color:#667085;padding:0 7%;font:inherit;cursor:pointer}
+nav button.on{color:#203f67;font-weight:800;border-top:3px solid #203f67}
+.tl{list-style:none;margin:0;padding:0}
+.tl li{border-left:3px solid #dce2ea;padding:8px 12px;color:#8a94a6}
+.tl li.done{border-color:#2e7d5b;color:#172033}
+.tl li.cur{border-color:#203f67;color:#203f67;font-weight:800}
+.tl em{display:block;font-size:12px;color:#8a94a6;font-style:normal;margin-top:3px}
+table{width:100%;border-collapse:collapse}
+td{padding:8px 0;border-bottom:1px solid #edf0f4}
+td:last-child{text-align:right}
+@media(max-width:700px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.two{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}.pipe{grid-template-columns:1fr 1fr}header{padding:0 12px}header input{max-width:none;width:55%}main{padding:22px 12px 85px}.row{align-items:flex-start;flex-direction:column}.row>div:last-child{width:100%}.item{grid-template-columns:1fr 95px 55px}}
+</style>
+</head>
+<body>
+<header>
+  <b>LaundryFlow</b>
+  <input id="q" type="search" placeholder="Search order, name, phone, item" aria-label="Search orders">
+</header>
+
+<main id="app"></main>
+<div id="toast" role="status"></div>
+
+<nav>
+  <button data-v="dash">Dashboard</button>
+  <button data-v="orders">Orders</button>
+  <button data-v="new">New order</button>
+</nav>
+
+<script>
+const STAGES=["Received","Inspection","Sorting","Washing","Drying","Ironing","Quality check","Packaging","Ready","Out for delivery","Delivered"];
+
+const SERVICES={
+  "Wash & fold":{shirt:25,tshirt:20,jeans:45,trouser:35,jacket:90,saree:80,bedsheet:60},
+  "Wash & iron":{shirt:40,tshirt:30,jeans:60,trouser:45,jacket:110,saree:100,bedsheet:80},
+  "Dry cleaning":{shirt:90,tshirt:80,jeans:130,trouser:100,jacket:250,saree:220,bedsheet:180},
+  "Ironing":{shirt:12,tshirt:10,jeans:18,trouser:15,jacket:40,saree:35,bedsheet:30}
+};
+
+const NAMES={
+  shirt:"Shirt",tshirt:"T-shirt",jeans:"Jeans",trouser:"Trouser",
+  jacket:"Jacket",saree:"Saree",bedsheet:"Bedsheet"
+};
+
+/* v2 intentionally starts empty so the old demo orders are not loaded. */
+const KEY="laundryflow_v2";
+let S,view="dash",sel=null,filter="";
+
+const now=()=>new Date().toISOString();
+
+const fmt=d=>new Date(d).toLocaleString("en-IN",{
+  day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"
+});
+
+const inr=n=>"₹"+Math.round(Number(n)||0).toLocaleString("en-IN");
+
+function seed(){
+  S={n:10245,orders:[]};
+  save();
+}
+
+function bill(o){
+  const sub=(o.items||[]).reduce(
+    (a,i)=>a+(SERVICES[o.service]?.[i.k]||0)*i.q,0
+  );
+  const ex=o.express?sub*.5:0;
+  const disc=Math.min(o.discount||0,sub);
+  const tax=(sub+ex-disc)*.18;
+  return {sub,ex,disc,tax,total:sub+ex-disc+tax};
+}
+
+function load(){
+  try{S=JSON.parse(localStorage.getItem(KEY));}catch(e){S=null}
+  if(!S||!Array.isArray(S.orders))seed();
+}
+
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(S));}
+  catch(e){console.error("Could not save order data",e)}
+}
+
+function toast(m){
+  const t=document.getElementById("toast");
+  t.textContent=m;
+  t.style.display="block";
+  setTimeout(()=>t.style.display="none",2200);
+}
+
+const overdue=o=>o.stage<10&&new Date(o.due)<new Date();
+
+const dueToday=o=>o.stage<10&&
+  new Date(o.due).toDateString()==new Date().toDateString();
+
+function pay(o){
+  const b=bill(o).total;
+  return o.paid>=b-.5?["Paid","ok"]:
+         o.paid>0?["Part paid","warn"]:
+         ["Pending","bad"];
+}
+
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c]));
+
+function orderRow(o){
+  const [p,c]=pay(o);
+  return `<div class="row" tabindex="0" role="button" data-o="${o.id}">
+    <div>
+      <b>#${esc(o.id)}</b> ${esc(o.name)}
+      <small>${esc(o.service)} · ${(o.items||[]).reduce((a,i)=>a+i.q,0)} items · due ${fmt(o.due)}</small>
+    </div>
+    <div>
+      <span class="badge">${STAGES[o.stage]}</span>
+      ${overdue(o)?'<span class="badge bad">Overdue</span>':""}
+      <span class="badge ${c}">${p}</span>
+    </div>
+  </div>`;
+}
+
+function dash(){
+  const a=S.orders;
+  const act=a.filter(o=>o.stage<10);
+  const rev=a.reduce((x,o)=>x+(Number(o.paid)||0),0);
+
+  return `<h2>What needs attention</h2>
+  <div class="grid">
+    <div class="stat"><b>${act.length}</b><span>Active orders</span></div>
+    <div class="stat"><b>${a.filter(dueToday).length}</b><span>Due today</span></div>
+    <div class="stat bad"><b>${a.filter(overdue).length}</b><span>Overdue</span></div>
+    <div class="stat"><b>${a.filter(o=>o.stage==8).length}</b><span>Ready</span></div>
+    <div class="stat"><b>${inr(rev)}</b><span>Collected</span></div>
+    <div class="stat"><b>${inr(a.reduce((x,o)=>x+bill(o).total-(Number(o.paid)||0),0))}</b><span>Outstanding</span></div>
+  </div>
+
+  <h3>Production pipeline</h3>
+  <div class="pipe">
+    ${[3,4,5,6,7,8].map(s=>`
+      <button data-f="${s}">
+        <b>${a.filter(o=>o.stage==s).length}</b>${STAGES[s]}
+      </button>`).join("")}
+  </div>
+
+  <h3>Overdue and due today</h3>
+  ${a.filter(o=>overdue(o)||dueToday(o)).map(orderRow).join("") ||
+    '<div class="panel">Nothing is late. Check the pipeline above for the next queue.</div>'}`;
+}
+
+function orders(){
+  let a=S.orders.slice().reverse();
+  const q=document.getElementById("q").value.toLowerCase();
+
+  if(filter!=="")a=a.filter(o=>o.stage==filter);
+
+  if(q){
+    a=a.filter(o=>
+      (o.id+o.name+o.phone+o.service+
+       (o.items||[]).map(i=>NAMES[i.k]).join(" "))
+      .toLowerCase().includes(q)
+    );
+  }
+
+  return `<h2>Orders${filter!==""?
+    " · "+STAGES[filter]+' <button class="btn alt" data-f="">Clear</button>':""}</h2>
+    ${a.map(orderRow).join("") ||
+      '<div class="panel">No orders match. Try a different name, phone or order number.</div>'}`;
+}
+
+function newOrder(){
+  return `<h2>New order</h2>
+  <div class="panel">
+    <div class="two">
+      <div>
+        <label for="nm">Customer name</label>
+        <input id="nm" autocomplete="name">
+      </div>
+      <div>
+        <label for="ph">Phone</label>
+        <input id="ph" inputmode="tel" placeholder="98xxx xxxxx" autocomplete="tel">
+      </div>
+    </div>
+
+    <div class="two">
+      <div>
+        <label for="sv">Service</label>
+        <select id="sv">${Object.keys(SERVICES).map(s=>`<option>${s}</option>`).join("")}</select>
+      </div>
+      <div>
+        <label for="du">Delivery in</label>
+        <select id="du">
+          <option value="2">2 days</option>
+          <option value="1">1 day</option>
+          <option value="3">3 days</option>
+        </select>
+      </div>
+    </div>
+
+    <label>Garments</label>
+    ${Object.keys(NAMES).map(k=>`
+      <div class="item">
+        <span>${NAMES[k]}</span>
+        <span class="pr" data-k="${k}"></span>
+        <input type="number" min="0" max="50" value="0"
+               data-q="${k}" aria-label="${NAMES[k]} quantity">
+      </div>`).join("")}
+
+    <div class="two">
+      <div>
+        <label for="ds">Discount (₹)</label>
+        <input id="ds" type="number" min="0" value="0">
+      </div>
+      <div>
+        <label for="ex">Priority</label>
+        <select id="ex">
+          <option value="0">Standard</option>
+          <option value="1">Express (+50%)</option>
+        </select>
+      </div>
+    </div>
+
+    <label for="in">Condition notes (stains, tears, missing buttons)</label>
+    <textarea id="in" rows="2"></textarea>
+
+    <div id="pv" style="margin:14px 0;font-weight:700"></div>
+    <button class="btn" id="cr" type="button">Create order</button>
+  </div>`;
+}
+
+/* FIX: never depend on browser-created global variables such as sv/ex/ds/nm/ph/du. */
+function readForm(){
+  const sv=document.getElementById("sv");
+  const ex=document.getElementById("ex");
+  const ds=document.getElementById("ds");
+
+  const items=[...document.querySelectorAll("[data-q]")]
+    .map(e=>({k:e.dataset.q,q:Number(e.value)||0}))
+    .filter(i=>i.q>0);
+
+  return {
+    service:sv.value,
+    items,
+    express:ex.value==="1",
+    discount:Number(ds.value)||0
+  };
+}
+
+function preview(){
+  const sv=document.getElementById("sv");
+  const pv=document.getElementById("pv");
+
+  if(!sv||!pv)return;
+
+  const f=readForm();
+
+  document.querySelectorAll(".pr").forEach(e=>{
+    e.textContent=inr(SERVICES[sv.value][e.dataset.k])+" each";
+  });
+
+  const b=bill(f);
+
+  pv.textContent=f.items.length
+    ? `Total ${inr(b.total)} (incl. 18% GST ${inr(b.tax)})`
+    : "Add at least one garment";
+}
+
+function qr(t){
+  /* Simple QR link using a public generator; order creation does not depend on it. */
+  return `<img alt="QR code" width="110" height="110"
+    src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(t)}">`;
+}
+
+function detail(){
+  const o=S.orders.find(x=>x.id==sel);
+  if(!o)return"";
+
+  const b=bill(o);
+  const [p,c]=pay(o);
+  const due=b.total-(Number(o.paid)||0);
+
+  return `<button class="btn alt" data-back>Back</button>
+  <h2 style="margin-top:12px">#${esc(o.id)} · ${esc(o.name)}</h2>
+
+  <div class="panel">
+    <span class="badge ${c}">${p}</span>
+    ${overdue(o)?'<span class="badge bad">Overdue</span>':""}
+    ${o.express?'<span class="badge warn">Express</span>':""}
+    <p>${esc(o.phone)} · due ${fmt(o.due)}</p>
+    ${o.instr?`<p><b>Condition notes:</b> ${esc(o.instr)}</p>`:""}
+    <div style="width:110px">${qr(o.id)}</div>
+    <small>Scan to open this order. Print and attach to the bag.</small>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Progress</h3>
+    <ul class="tl">
+      ${STAGES.map((s,i)=>{
+        const l=o.log.find(x=>x.s==i);
+        return `<li class="${i<o.stage?"done":i==o.stage?"cur":""}">
+          ${s}${l?`<em>${fmt(l.at)}</em>`:""}
+        </li>`;
+      }).join("")}
+    </ul>
+
+    ${o.stage<10?
+      `<button class="btn" data-adv="${o.id}">Move to ${STAGES[o.stage+1]}</button>
+       ${o.stage>3&&o.stage<9?
+        `<button class="btn bad" data-qc="${o.id}">Failed QC: back to Washing</button>`:""}`
+      :"<b>Delivered</b>"}
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Bill</h3>
+    <table>
+      ${(o.items||[]).map(i=>`
+        <tr><td>${NAMES[i.k]} × ${i.q}</td>
+        <td>${inr(SERVICES[o.service][i.k]*i.q)}</td></tr>`).join("")}
+      <tr><td>Express charge</td><td>${inr(b.ex)}</td></tr>
+      <tr><td>Discount</td><td>−${inr(b.disc)}</td></tr>
+      <tr><td>GST 18%</td><td>${inr(b.tax)}</td></tr>
+      <tr><td><b>Total</b></td><td><b>${inr(b.total)}</b></td></tr>
+      <tr><td>Paid</td><td>${inr(o.paid)}</td></tr>
+    </table>
+
+    ${due>.5?
+      `<div class="two">
+        <input id="pa" type="number" min="1" max="${Math.ceil(due)}"
+               value="${Math.ceil(due)}" aria-label="Payment amount">
+        <button class="btn" data-pay="${o.id}">Record payment</button>
+      </div>`:""}
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Audit trail</h3>
+    ${o.log.slice().reverse().map(l=>
+      `<small>${fmt(l.at)} · ${esc(l.by)} · ${
+        l.note?esc(l.note):"moved to "+STAGES[l.s]}</small><br>`
+    ).join("")}
+  </div>`;
+}
+
+function render(){
+  const el=document.getElementById("app");
+
+  el.innerHTML=
+    sel?detail():
+    view=="dash"?dash():
+    view=="orders"?orders():
+    newOrder();
+
+  document.querySelectorAll("nav button").forEach(b=>
+    b.classList.toggle("on",b.dataset.v==view&&!sel)
+  );
+
+  if(view=="new"&&!sel)preview();
+
+  window.scrollTo(0,0);
+}
+
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button,[data-o]");
+  if(!t)return;
+
+  const d=t.dataset;
+
+  if(d.v){
+    view=d.v;
+    sel=null;
+    filter="";
+    render();
+    return;
+  }
+
+  if(d.o){
+    sel=d.o;
+    render();
+    return;
+  }
+
+  if("back"in d){
+    sel=null;
+    render();
+    return;
+  }
+
+  if("f"in d){
+    filter=d.f===""?"":Number(d.f);
+    view="orders";
+    render();
+    return;
+  }
+
+  if(d.adv){
+    const o=S.orders.find(x=>x.id==d.adv);
+    if(!o)return;
+    o.stage++;
+    o.log.push({s:o.stage,at:now(),by:"You"});
+    save();
+    toast("Moved to "+STAGES[o.stage]);
+    render();
+    return;
+  }
+
+  if(d.qc){
+    if(!confirm("Send this order back to Washing?"))return;
+    const o=S.orders.find(x=>x.id==d.qc);
+    if(!o)return;
+    o.stage=3;
+    o.log.push({
+      s:3,at:now(),by:"You",
+      note:"QC failed, returned to Washing"
+    });
+    save();
+    toast("Returned to Washing");
+    render();
+    return;
+  }
+
+  if(d.pay){
+    const o=S.orders.find(x=>x.id==d.pay);
+    const input=document.getElementById("pa");
+    if(!o||!input)return;
+
+    const a=Number(input.value);
+    const due=bill(o).total-(Number(o.paid)||0);
+
+    if(!(a>0)||a>due+.5){
+      toast("Enter an amount up to "+inr(due));
+      return;
+    }
+
+    o.paid=(Number(o.paid)||0)+a;
+    save();
+    toast("Payment recorded");
+    render();
+    return;
+  }
+
+  /* FIXED CREATE ORDER */
+  if(t.id==="cr"){
+    const nm=document.getElementById("nm");
+    const ph=document.getElementById("ph");
+    const du=document.getElementById("du");
+    const instr=document.getElementById("in");
+
+    const f=readForm();
+
+    const name=nm.value.trim();
+    const phone=ph.value.trim();
+
+    if(!name){
+      toast("Enter customer name");
+      nm.focus();
+      return;
+    }
+
+    if(!/^[0-9 +]{10,14}$/.test(phone)){
+      toast("Enter a valid 10-digit phone number");
+      ph.focus();
+      return;
+    }
+
+    if(!f.items.length){
+      toast("Add at least one garment");
+      return;
+    }
+
+    const id="LF"+(++S.n);
+    const d=new Date();
+
+    const deliveryDays=Number(du.value)||2;
+
+    S.orders.push({
+      id,
+      name,
+      phone,
+      ...f,
+      instr:instr.value.trim(),
+      stage:0,
+      created:now(),
+      due:new Date(
+        d.getTime()+
+        deliveryDays*864e5/(f.express?2:1)
+      ).toISOString(),
+      paid:0,
+      log:[{s:0,at:now(),by:"You"}]
+    });
+
+    save();
+
+    sel=id;
+    toast("Order "+id+" created");
+    render();
+    return;
+  }
+});
+
+document.addEventListener("input",e=>{
+  if(e.target.id==="q"){
+    if(!sel){
+      view="orders";
+      render();
+    }
+  }else if(view==="new"&&!sel){
+    preview();
+  }
+});
+
+document.addEventListener("change",e=>{
+  if(view==="new"&&!sel)preview();
+});
+
+document.addEventListener("keydown",e=>{
+  if(e.key==="Enter"&&e.target.dataset.o){
+    sel=e.target.dataset.o;
+    render();
+  }
+});
+
+load();
+render();
+</script>
+</body>
+</html>
